@@ -295,15 +295,25 @@ pub async fn export_table_to_csv(
 }
 
 #[tauri::command]
+pub async fn write_text_file(filepath: String, content: String) -> Result<()> {
+    std::fs::write(filepath, content)?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn show_save_dialog(
     default_name: String,
+    filters: Vec<(String, Vec<String>)>,
 ) -> Result<Option<String>> {
-    let file = rfd::AsyncFileDialog::new()
-        .set_title("Export CSV")
-        .set_file_name(&default_name)
-        .add_filter("CSV File", &["csv"])
-        .save_file()
-        .await;
+    let mut dialog = rfd::AsyncFileDialog::new()
+        .set_title("Export File")
+        .set_file_name(&default_name);
 
+    for (name, exts) in &filters {
+        let exts_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+        dialog = dialog.add_filter(name, &exts_refs);
+    }
+
+    let file = dialog.save_file().await;
     Ok(file.map(|f| f.path().to_string_lossy().to_string()))
 }

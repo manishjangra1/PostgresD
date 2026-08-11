@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Folder, ChevronDown, ChevronRight, RefreshCw, LogOut, Terminal, Layers } from "lucide-react";
+import { Folder, ChevronDown, ChevronRight, RefreshCw, LogOut, Layers, HelpCircle, Settings } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { databaseApi, connectionApi } from "../../lib/api";
 import { Tab, TableInfo } from "../../types";
@@ -96,15 +96,7 @@ export function Sidebar() {
     openTab(newTab);
   };
 
-  const handleOpenSqlEditor = () => {
-    const tabId = `${activeConnectionId}::sql-editor::${crypto.randomUUID().substring(0, 8)}`;
-    const newTab: Tab = {
-      id: tabId,
-      title: "Query Editor",
-      type: "query",
-    };
-    openTab(newTab);
-  };
+
 
   const handleRefresh = async () => {
     await queryClient.invalidateQueries();
@@ -167,26 +159,11 @@ export function Sidebar() {
   return (
     <div className="h-full flex flex-col justify-between select-none">
       
-      {/* Top: Active Connection Details */}
+      {/* Top: Database Explorer Header */}
       <div>
-        <div className="p-4 border-b border-border bg-accent/20 flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Connected to</span>
-            <button 
-              onClick={handleDisconnect}
-              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors"
-              title="Disconnect"
-            >
-              <LogOut size={13} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isProd ? "bg-red-500" : "bg-green-500"}`} />
-            <span className="font-semibold text-sm truncate">{activeConn?.name}</span>
-          </div>
-          
+        <div className="p-4 border-b border-border flex flex-col gap-1.5 bg-accent/5">
           {/* Database Selector Dropdown */}
-          <div className="flex flex-col gap-1 mt-1">
+          <div className="flex flex-col gap-1">
             <label className="text-[9px] font-bold text-muted-foreground uppercase">Database</label>
             {loadingDbs || dbSwitching ? (
               <div className="h-[28px] bg-accent/30 rounded flex items-center px-2 text-xs text-muted-foreground animate-pulse">
@@ -208,27 +185,18 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Action: SQL Editor */}
-        <div className="p-3 border-b border-border flex gap-2">
-          <button
-            onClick={handleOpenSqlEditor}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground font-semibold rounded text-xs hover:opacity-90 active:scale-[0.98] transition-all"
-          >
-            <Terminal size={13} />
-            <span>New SQL Editor</span>
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="p-1.5 border border-border rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="Refresh database structure"
-          >
-            <RefreshCw size={13} />
-          </button>
-        </div>
-
         {/* Explorer progressive list */}
         <div className="p-2 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-230px)]">
-          <span className="text-[10px] font-bold text-muted-foreground uppercase px-2 mb-1">Schemas & Tables</span>
+          <div className="flex justify-between items-center px-2 mb-1">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase">Schemas & Tables</span>
+            <button
+              onClick={handleRefresh}
+              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
+              title="Refresh database structure"
+            >
+              <RefreshCw size={11} />
+            </button>
+          </div>
           
           {loadingSchemas ? (
             <div className="px-2 py-4 text-xs text-muted-foreground animate-pulse">
@@ -254,7 +222,7 @@ export function Sidebar() {
                     </div>
                     {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                   </button>
-
+ 
                   {/* Progressive/Lazy Child Table Render */}
                   {isExpanded && <SchemaTablesList schemaName={s.name} />}
                 </div>
@@ -263,16 +231,31 @@ export function Sidebar() {
           )}
         </div>
       </div>
-
-      {/* Footer environment label */}
-      <div className="p-3 border-t border-border flex justify-center bg-accent/10">
-        <span className={`text-[10px] font-bold tracking-widest px-2.5 py-0.5 rounded border uppercase ${
-          isProd ? "bg-red-500/20 border-red-500/30 text-red-400" :
-          activeConn?.environment === "Staging" ? "bg-amber-500/20 border-amber-500/30 text-amber-400" :
-          "bg-muted border-border text-muted-foreground"
-        }`}>
-          {activeConn?.environment} Env
-        </span>
+ 
+      {/* Footer: Connection Info, Env, Disconnect & Meta */}
+      <div className="p-3 border-t border-border flex flex-col gap-2 bg-accent/15">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isProd ? "bg-red-500" : "bg-green-500"}`} />
+            <span className="font-semibold truncate max-w-[150px]" title={activeConn?.name}>
+              {activeConn?.name}
+            </span>
+          </div>
+          <button 
+            onClick={handleDisconnect}
+            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors shrink-0"
+            title="Disconnect Connection"
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
+        <div className="flex justify-between items-center text-[10px] text-muted-foreground border-t border-border/40 pt-2">
+          <span>v1.0.0 Stable</span>
+          <div className="flex gap-2">
+            <HelpCircle size={13} className="cursor-pointer hover:text-foreground" />
+            <Settings size={13} className="cursor-pointer hover:text-foreground" />
+          </div>
+        </div>
       </div>
 
     </div>

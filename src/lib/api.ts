@@ -111,7 +111,11 @@ export const databaseApi = {
     await invoke("export_table_to_csv", { id, schema, table, filepath });
   },
 
-  async showSaveDialog(defaultName: string): Promise<string | null> {
-    return invoke<string | null>("show_save_dialog", { defaultName });
+  async showSaveDialog(defaultName: string, filters: [string, string[]][]): Promise<string | null> {
+    return invoke<string | null>("show_save_dialog", { defaultName, filters });
+  },
+
+  async writeTextFile(filepath: string, content: string): Promise<void> {
+    await invoke("write_text_file", { filepath, content });
   }
 };

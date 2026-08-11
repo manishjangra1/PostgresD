@@ -34,6 +34,7 @@ pub fn run() {
             commands::delete_password,
             commands::export_table_to_csv,
             commands::show_save_dialog,
+            commands::write_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

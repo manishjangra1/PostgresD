@@ -3,7 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { 
   Search, Filter, RefreshCw, Plus, Trash2, Save, X, 
-  ChevronLeft, ChevronRight, AlertCircle, PlusCircle, ArrowUpDown, Download 
+  ChevronLeft, ChevronRight, AlertCircle, PlusCircle, ArrowUpDown, Download,
+  Terminal, Copy
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { databaseApi } from "../../lib/api";
@@ -19,7 +20,7 @@ interface DataGridProps {
 }
 
 export function DataGrid({ schema, table, columns, relations, totalRows, onRowsChanged }: DataGridProps) {
-  const { activeConnectionId } = useUIStore();
+  const { activeConnectionId, openTab } = useUIStore();
 
   // Foreign Key Reference details overlay state
   interface FkRecordDetails {
@@ -29,6 +30,60 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
     value: any;
   }
   const [activeFkDetails, setActiveFkDetails] = useState<FkRecordDetails | null>(null);
+
+  // Row selection state
+  const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    rowIndex: number;
+    colName: string;
+    value: any;
+  } | null>(null);
+
+  const handleOpenSqlEditor = () => {
+    const tabId = `${activeConnectionId}::sql-editor::${crypto.randomUUID().substring(0, 8)}`;
+    const newTab = {
+      id: tabId,
+      title: "Query Editor",
+      type: "query" as const,
+    };
+    openTab(newTab);
+  };
+
+  const handleCopyRow = async (row: any) => {
+    try {
+      const cleanRow: Record<string, any> = {};
+      Object.keys(row).forEach(key => {
+        if (!key.endsWith(" []")) {
+          cleanRow[key] = row[key];
+        }
+      });
+      await navigator.clipboard.writeText(JSON.stringify(cleanRow, null, 2));
+      alert("Successfully copied row as JSON to clipboard!");
+    } catch (err: any) {
+      alert("Failed to copy: " + err.message);
+    }
+  };
+
+  const convertToCsv = (headers: string[], rows: any[]): string => {
+    const csvRows = [];
+    csvRows.push(headers.join(","));
+    for (const row of rows) {
+      const values = headers.map(header => {
+        const val = row[header];
+        const valStr = val === null ? "" : typeof val === "object" ? JSON.stringify(val) : val.toString();
+        const escaped = valStr.replace(/"/g, '""');
+        return `"${escaped}"`;
+      });
+      csvRows.push(values.join(","));
+    }
+    return csvRows.join("\n");
+  };
+
 
   // Pagination State
   const [pageSize, setPageSize] = useState<number>(50);
@@ -78,6 +133,10 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
     }
   }, [columns, visibleColumns]);
 
+  useEffect(() => {
+    setSelectedRowIndices(new Set());
+  }, [currentPage, pageSize, table]);
+
   // Debounce search query
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -87,6 +146,8 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
 
     return () => clearTimeout(handler);
   }, [searchQuery]);
+
+
 
   // Dynamic filter compilation
   const compiledFilters = React.useMemo(() => {
@@ -174,16 +235,70 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
   });
 
   const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const handleExport = async () => {
+  useEffect(() => {
+    const handleCloseMenus = () => {
+      if (showExportMenu) setShowExportMenu(false);
+      if (contextMenu?.visible) setContextMenu(null);
+    };
+    document.addEventListener("click", handleCloseMenus);
+    return () => document.removeEventListener("click", handleCloseMenus);
+  }, [showExportMenu, contextMenu]);
+
+  const handleExportData = async (scope: "selected" | "all", format: "json" | "excel") => {
+    setShowExportMenu(false);
     setExporting(true);
     try {
-      const defaultName = `${table}_export.csv`;
-      const path = await databaseApi.showSaveDialog(defaultName);
-      if (path) {
-        await databaseApi.exportTableToCsv(activeConnectionId!, schema, table, path);
-        alert(`Successfully exported table to:\n${path}`);
+      let dataToExport: any[] = [];
+      if (scope === "selected") {
+        dataToExport = rows.filter((_, idx) => selectedRowIndices.has(idx));
+      } else {
+        const res = await databaseApi.fetchTableRows(
+          activeConnectionId!,
+          schema,
+          table,
+          10000,
+          0,
+          compiledFilters,
+          sort
+        );
+        dataToExport = res.rows;
       }
+
+      const exportRows = dataToExport.map(row => {
+        const clean: Record<string, any> = {};
+        Object.keys(row).forEach(key => {
+          if (!key.endsWith(" []")) {
+            clean[key] = row[key];
+          }
+        });
+        return clean;
+      });
+
+      if (exportRows.length === 0) {
+        alert("No data available to export.");
+        return;
+      }
+
+      const extension = format === "json" ? "json" : "csv";
+      const filterName = format === "json" ? "JSON File" : "CSV File";
+      const defaultName = `${table}_export.${extension}`;
+
+      const path = await databaseApi.showSaveDialog(defaultName, [[filterName, [extension]]]);
+      if (!path) return;
+
+      let content = "";
+      if (format === "json") {
+        content = JSON.stringify(exportRows, null, 2);
+      } else {
+        const headers = columns.filter(c => !c.type.endsWith("[]")).map(c => c.name);
+        const csv = convertToCsv(headers, exportRows);
+        content = "\uFEFF" + csv;
+      }
+
+      await databaseApi.writeTextFile(path, content);
+      alert(`Successfully exported data to:\n${path}`);
     } catch (e: any) {
       alert("Export failed: " + (e.message || JSON.stringify(e)));
     } finally {
@@ -326,7 +441,7 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
   };
 
   const totalWidth = React.useMemo(() => {
-    return 40 + activeColumns.reduce((sum, col) => sum + (columnWidths[col.name] || 150), 0);
+    return 80 + activeColumns.reduce((sum, col) => sum + (columnWidths[col.name] || 150), 0);
   }, [activeColumns, columnWidths]);
 
   const totalPages = Math.ceil(totalRows / pageSize) || 1;
@@ -502,6 +617,16 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
             )}
           </div>
 
+          {/* New SQL Editor Button */}
+          <button
+            onClick={handleOpenSqlEditor}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground font-semibold rounded-lg text-xs hover:opacity-90 active:scale-[0.98] transition-all"
+            title="Open a new SQL Query Editor tab"
+          >
+            <Terminal size={13} />
+            <span>New SQL Editor</span>
+          </button>
+
           {/* Active Filter Badges */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {filters.map((f, i) => (
@@ -528,16 +653,58 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
             <span>Add Row</span>
           </button>
 
-          {/* Export CSV (Streaming) */}
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
-            title="Export full table to CSV streamingly"
-          >
-            <Download size={13} />
-            <span>{exporting ? "Exporting..." : "Export CSV"}</span>
-          </button>
+          {/* Export Dropdown Button */}
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowExportMenu(!showExportMenu);
+              }}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-xs font-semibold hover:bg-accent text-muted-foreground hover:text-foreground transition-all disabled:opacity-50 cursor-pointer"
+              title="Export data options"
+            >
+              <Download size={13} />
+              <span>{exporting ? "Exporting..." : "Export"}</span>
+            </button>
+
+            {showExportMenu && (
+              <div 
+                className="absolute right-0 top-8 w-[200px] border border-border bg-card shadow-2xl rounded-lg py-1 z-50 text-xs flex flex-col font-sans text-left"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase border-b border-border">Export Selected ({selectedRowIndices.size})</div>
+                <button
+                  onClick={() => handleExportData("selected", "json")}
+                  disabled={selectedRowIndices.size === 0}
+                  className="px-3 py-1.5 hover:bg-accent hover:text-foreground text-left transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Selected as JSON (.json)
+                </button>
+                <button
+                  onClick={() => handleExportData("selected", "excel")}
+                  disabled={selectedRowIndices.size === 0}
+                  className="px-3 py-1.5 hover:bg-accent hover:text-foreground text-left transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Selected as Excel / CSV (.csv)
+                </button>
+
+                <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase border-t border-b border-border mt-1">Export Entire Table</div>
+                <button
+                  onClick={() => handleExportData("all", "json")}
+                  className="px-3 py-1.5 hover:bg-accent hover:text-foreground text-left transition-colors cursor-pointer font-sans"
+                >
+                  Entire Table as JSON (.json)
+                </button>
+                <button
+                  onClick={() => handleExportData("all", "excel")}
+                  className="px-3 py-1.5 hover:bg-accent hover:text-foreground text-left transition-colors cursor-pointer font-sans"
+                >
+                  Entire Table as Excel / CSV (.csv)
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Refresh Grid */}
           <button
@@ -583,9 +750,23 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
                     className="bg-accent/40 sticky top-0 border-b border-border z-10 select-none flex items-stretch w-full"
                   >
                     <th 
-                      className="p-2 border-r border-border text-center bg-card shrink-0 flex items-center justify-center"
-                      style={{ width: "40px", minWidth: "40px", maxWidth: "40px" }}
-                    ></th>
+                      className="p-2 border-r border-border text-center bg-card shrink-0 flex items-center justify-center gap-1.5"
+                      style={{ width: "80px", minWidth: "80px", maxWidth: "80px" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && selectedRowIndices.size === rows.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedRowIndices(new Set(rows.map((_, i) => i)));
+                          } else {
+                            setSelectedRowIndices(new Set());
+                          }
+                        }}
+                        className="rounded border-border scale-95 cursor-pointer accent-primary"
+                        title="Select/Deselect all rows"
+                      />
+                    </th>
                     {activeColumns.map((c) => (
                       <th
                         key={c.name}
@@ -640,17 +821,39 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
                           isEven ? "bg-background" : "bg-accent/10"
                         }`}
                       >
-                        {/* Delete/Action column */}
+                        {/* Select, Copy, Delete column */}
                         <td 
-                          className="p-2 border-r border-border flex items-center justify-center shrink-0 h-full bg-card/10"
-                          style={{ width: "40px", minWidth: "40px", maxWidth: "40px" }}
+                          className="p-2 border-r border-border flex items-center justify-center shrink-0 h-full bg-card/10 gap-1.5"
+                          style={{ width: "80px", minWidth: "80px", maxWidth: "80px" }}
                         >
+                          <input
+                            type="checkbox"
+                            checked={selectedRowIndices.has(vRow.index)}
+                            onChange={(e) => {
+                              const next = new Set(selectedRowIndices);
+                              if (e.target.checked) {
+                                next.add(vRow.index);
+                              } else {
+                                next.delete(vRow.index);
+                              }
+                              setSelectedRowIndices(next);
+                            }}
+                            className="rounded border-border scale-95 cursor-pointer accent-primary"
+                            title="Select row for export"
+                          />
+                          <button
+                            onClick={() => handleCopyRow(row)}
+                            className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                            title="Copy row as JSON"
+                          >
+                            <Copy size={11} />
+                          </button>
                           <button
                             onClick={() => handleDeleteRow(vRow.index)}
                             className="p-0.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all"
                             title="Delete row"
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={11} />
                           </button>
                         </td>
 
@@ -666,6 +869,17 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
                             <td
                               key={col.name}
                               onDoubleClick={() => handleCellDoubleClick(vRow.index, col.name, val)}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                setContextMenu({
+                                  visible: true,
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                  rowIndex: vRow.index,
+                                  colName: col.name,
+                                  value: val,
+                                });
+                              }}
                               className="p-2 border-r border-border shrink-0 truncate h-full flex items-center"
                               style={{
                                 width: `${width}px`,
@@ -924,6 +1138,42 @@ export function DataGrid({ schema, table, columns, relations, totalRows, onRowsC
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 6. Right-Click Context Menu */}
+      {contextMenu?.visible && (
+        <div 
+          className="fixed border border-border bg-card shadow-2xl rounded-lg py-1.5 z-50 text-xs flex flex-col min-w-[170px] font-sans text-left"
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1 text-[9px] font-bold text-muted-foreground uppercase border-b border-border/60 mb-1 select-none">
+            Cell Actions ({contextMenu.colName})
+          </div>
+          <button
+            onClick={async () => {
+              const val = contextMenu.value;
+              const textVal = val === null ? "NULL" : typeof val === "object" ? JSON.stringify(val) : val.toString();
+              await navigator.clipboard.writeText(textVal);
+              setContextMenu(null);
+            }}
+            className="px-3 py-1.5 hover:bg-accent hover:text-foreground text-left transition-colors flex items-center gap-2 cursor-pointer font-sans"
+          >
+            <Copy size={11} className="text-muted-foreground" />
+            <span>Copy Cell Value</span>
+          </button>
+          <button
+            onClick={async () => {
+              const row = rows[contextMenu.rowIndex];
+              await handleCopyRow(row);
+              setContextMenu(null);
+            }}
+            className="px-3 py-1.5 hover:bg-accent hover:text-foreground text-left transition-colors flex items-center gap-2 cursor-pointer font-sans"
+          >
+            <Copy size={11} className="text-muted-foreground" />
+            <span>Copy Entire Row (JSON)</span>
+          </button>
         </div>
       )}
 
