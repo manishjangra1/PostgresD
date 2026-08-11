@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Folder, ChevronDown, ChevronRight, RefreshCw, LogOut, Layers, HelpCircle, Settings } from "lucide-react";
+import { Folder, ChevronDown, ChevronRight, RefreshCw, LogOut, Layers, Database, Sun, Moon } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { databaseApi, connectionApi } from "../../lib/api";
 import { Tab, TableInfo } from "../../types";
@@ -15,6 +15,8 @@ export function Sidebar() {
     setSelectedSchema,
     setActiveConnectionId,
     openTab,
+    theme,
+    setTheme,
   } = useUIStore();
 
   const [expandedSchemas, setExpandedSchemas] = useState<Record<string, boolean>>({ public: true });
@@ -157,104 +159,102 @@ export function Sidebar() {
   const isProd = activeConn?.environment === "Production";
 
   return (
-    <div className="h-full flex flex-col justify-between select-none">
+    <div className="h-full flex flex-col select-none">
       
-      {/* Top: Database Explorer Header */}
-      <div>
-        <div className="p-4 border-b border-border flex flex-col gap-1.5 bg-accent/5">
-          {/* Database Selector Dropdown */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[9px] font-bold text-muted-foreground uppercase">Database</label>
-            {loadingDbs || dbSwitching ? (
-              <div className="h-[28px] bg-accent/30 rounded flex items-center px-2 text-xs text-muted-foreground animate-pulse">
-                Switching database...
-              </div>
-            ) : (
-              <select
-                value={selectedDatabase || ""}
-                onChange={(e) => handleDatabaseChange(e.target.value)}
-                className="px-2 py-1 rounded bg-background border border-border outline-none text-xs font-mono h-[28px] focus:border-primary/50 cursor-pointer"
-              >
-                {databases.map((db) => (
-                  <option key={db.name} value={db.name}>
-                    {db.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-
-        {/* Explorer progressive list */}
-        <div className="p-2 flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-230px)]">
-          <div className="flex justify-between items-center px-2 mb-1">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase">Schemas & Tables</span>
-            <button
-              onClick={handleRefresh}
-              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
-              title="Refresh database structure"
-            >
-              <RefreshCw size={11} />
-            </button>
-          </div>
-          
-          {loadingSchemas ? (
-            <div className="px-2 py-4 text-xs text-muted-foreground animate-pulse">
-              Loading schemas...
-            </div>
-          ) : schemas.length === 0 ? (
-            <div className="px-2 py-4 text-xs text-muted-foreground italic">
-              No schemas found.
+      {/* Top: Database Explorer Header (Aligned with Workspace Tab bar height 36px) */}
+      <div className="h-9 border-b border-border flex items-center px-3 bg-accent/5 shrink-0 select-none">
+        <div className="flex-1 flex items-center gap-2">
+          <Database size={13} className="text-muted-foreground" />
+          {loadingDbs || dbSwitching ? (
+            <div className="flex-1 text-xs text-muted-foreground animate-pulse">
+              Switching...
             </div>
           ) : (
-            schemas.map((s) => {
-              const isExpanded = !!expandedSchemas[s.name];
-              return (
-                <div key={s.name} className="flex flex-col">
-                  {/* Schema Node */}
-                  <button
-                    onClick={() => toggleSchema(s.name)}
-                    className="flex items-center justify-between w-full px-2 py-1 text-xs font-semibold rounded hover:bg-accent/40 text-left text-muted-foreground hover:text-foreground"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <Layers size={13} className="text-muted-foreground/60" />
-                      <span className="truncate font-mono">{s.name}</span>
-                    </div>
-                    {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  </button>
- 
-                  {/* Progressive/Lazy Child Table Render */}
-                  {isExpanded && <SchemaTablesList schemaName={s.name} />}
-                </div>
-              );
-            })
+            <select
+              value={selectedDatabase || ""}
+              onChange={(e) => handleDatabaseChange(e.target.value)}
+              className="flex-1 bg-transparent outline-none text-xs font-semibold font-mono h-6 cursor-pointer border-none p-0 focus:ring-0"
+            >
+              {databases.map((db) => (
+                <option key={db.name} value={db.name} className="bg-background text-foreground">
+                  {db.name}
+                </option>
+              ))}
+            </select>
           )}
         </div>
       </div>
- 
-      {/* Footer: Connection Info, Env, Disconnect & Meta */}
-      <div className="p-3 border-t border-border flex flex-col gap-2 bg-accent/15">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isProd ? "bg-red-500" : "bg-green-500"}`} />
-            <span className="font-semibold truncate max-w-[150px]" title={activeConn?.name}>
-              {activeConn?.name}
-            </span>
+
+      {/* Explorer Header Box (Aligned with TableView Header bar height 68px) */}
+      <div className="h-[68px] px-4 border-b border-border bg-accent/2 flex items-center justify-between shrink-0 select-none">
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Schemas & Tables</span>
+        <button
+          onClick={handleRefresh}
+          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+          title="Refresh database structure"
+        >
+          <RefreshCw size={11} />
+        </button>
+      </div>
+
+      {/* Explorer list: flex-1 takes all available space, min-h-0 enables scrolling */}
+      <div className="flex-1 p-2 flex flex-col gap-1 overflow-y-auto min-h-0">
+        {loadingSchemas ? (
+          <div className="px-2 py-4 text-xs text-muted-foreground animate-pulse">
+            Loading schemas...
           </div>
+        ) : schemas.length === 0 ? (
+          <div className="px-2 py-4 text-xs text-muted-foreground italic">
+            No schemas found.
+          </div>
+        ) : (
+          schemas.map((s) => {
+            const isExpanded = !!expandedSchemas[s.name];
+            return (
+              <div key={s.name} className="flex flex-col">
+                {/* Schema Node */}
+                <button
+                  onClick={() => toggleSchema(s.name)}
+                  className="flex items-center justify-between w-full px-2 py-1 text-xs font-semibold rounded hover:bg-accent/40 text-left text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Layers size={13} className="text-muted-foreground/60" />
+                    <span className="truncate font-mono">{s.name}</span>
+                  </div>
+                  {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                </button>
+
+                {/* Progressive/Lazy Child Table Render */}
+                {isExpanded && <SchemaTablesList schemaName={s.name} />}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Footer: Connection Info & Theme switcher (Aligned with Table Pagination footer height 48px) */}
+      <div className="h-[48px] border-t border-border bg-card flex items-center justify-between px-3 text-xs select-none shrink-0">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isProd ? "bg-red-500" : "bg-green-500"}`} />
+          <span className="font-semibold truncate max-w-[150px]" title={activeConn?.name}>
+            {activeConn?.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button 
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
           <button 
             onClick={handleDisconnect}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors shrink-0"
+            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors shrink-0 cursor-pointer"
             title="Disconnect Connection"
           >
             <LogOut size={13} />
           </button>
-        </div>
-        <div className="flex justify-between items-center text-[10px] text-muted-foreground border-t border-border/40 pt-2">
-          <span>v1.0.0 Stable</span>
-          <div className="flex gap-2">
-            <HelpCircle size={13} className="cursor-pointer hover:text-foreground" />
-            <Settings size={13} className="cursor-pointer hover:text-foreground" />
-          </div>
         </div>
       </div>
 

@@ -54,8 +54,8 @@ export function TableView({ schema, table }: TableViewProps) {
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-background">
       
-      {/* Header Info */}
-      <div className="px-6 py-4 border-b border-border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4">
+      {/* Header Info (Aligned with Sidebar Explorer header height 68px) */}
+      <div className="h-[68px] px-6 border-b border-border bg-card flex flex-row justify-between items-center gap-4 shrink-0 select-none">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg bg-accent/60 flex items-center justify-center text-muted-foreground border border-border">
             <TableProperties size={18} />
