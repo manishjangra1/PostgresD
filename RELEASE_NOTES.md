@@ -1,5 +1,22 @@
 # PostgresD Release Notes 🐘
 
+## Version 0.1.1 (Stable Release)
+
+This release focuses on pixel-perfect layout alignments, auto-stretching components, theme control integration, and native compilation pipelines for cross-platform releases.
+
+### 🌟 New Features & Enhancements
+
+* **Double-Row Header & Footer Alignment**:
+  * The Database selector height matches the Tab Bar height (`36px`).
+  * The explorer Schemas list header matches the Workspace title header (`68px`).
+  * The connection status bar matches the DataGrid pagination row (`48px`).
+* **Auto-Stretching Explorer**: Refactored the tables list container to use dynamic CSS flexbox layouts, removing hardcoded heights so the table nodes list expands fully to cover empty space.
+* **Connection Bar Theme Switcher**: Integrated a Light/Dark theme switcher (Sun/Moon button) directly inside the sidebar connection footer.
+* **App Shell Branding**: Replaced default index.html metadata title and shortcut icon references with `PostgresD` and the custom squircle logo asset.
+* **GitHub Release Pipelines**: Created a CI/CD build pipeline (`.github/workflows/release.yml`) to automatically compile and package the app for macOS, Windows, and Linux.
+
+---
+
 ## Version 0.1.0 Stable
 
 We are excited to announce the initial release of **PostgresD**, a modern, lightweight desktop client for PostgreSQL built with Tauri, React, and Rust. This release focuses on high-performance database browsing, Prisma Studio-style relational previews, secure storage, and pixel-perfect design alignment.
