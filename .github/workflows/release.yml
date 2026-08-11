@@ -1,0 +1,71 @@
+name: "Publish Release"
+
+on:
+  push:
+    tags:
+      - "v*" # Triggers the workflow when a version tag like v0.1.0 is pushed
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # builds for macOS (.dmg, .app)
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest" # builds for Intel macOS (.dmg, .app)
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04" # builds for Linux (.deb, .AppImage)
+            args: ""
+          - platform: "windows-latest" # builds for Windows (.msi, .exe)
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux system dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            librsvg2-common
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Build Tauri App & Publish Release Draft
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "PostgresD ${{ github.ref_name }}"
+          releaseBody: "See RELEASE_NOTES.md for full changes list."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
